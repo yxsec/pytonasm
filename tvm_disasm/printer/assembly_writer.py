@@ -297,6 +297,13 @@ class AssemblyWriter:
         if alias:
             return alias
 
+        if (
+            opcode in {"PUSHREF", "PUSHREFSLICE"}
+            and isinstance(first_arg, str)
+            and first_arg.startswith("x{")
+        ):
+            return f"<b x{first_arg[1:]} s, b> {opcode}"
+
         first_arg_str = self._value_to_string(first_arg)
 
         if opcode == "SETCP":
@@ -342,12 +349,6 @@ class AssemblyWriter:
         if opcode == "PUSH_LONG":
             return f"{first_arg_str} s() PUSH"
 
-        if opcode == "PUSHREF" and first_arg_str.startswith("x"):
-            return f"<b x{first_arg_str[1:]} s, b> PUSHREF"
-
-        if opcode == "PUSHREFSLICE" and first_arg_str.startswith("x"):
-            return f"<b x{first_arg_str[1:]} s, b> PUSHREFSLICE"
-
         # Debug instructions
         if opcode == "DEBUG":
             if first_arg == 0x00:
@@ -384,10 +385,8 @@ class AssemblyWriter:
         )
 
         if has_cell_with_refs:
-            # Multi-line format for cells with refs
             for arg in node.arguments:
                 if isinstance(arg, ScalarNode) and isinstance(arg.value, Cell):
-                    # Expand cell and its refs
                     self._write_cell_slice(arg.value)
                 elif isinstance(arg, ScalarNode):
                     self.writer.write_line(f"{arg.value}")

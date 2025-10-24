@@ -32,6 +32,14 @@ def parse_code_dictionary(
             length += 1
         return length
 
+    def to_signed(value: int, bits: int) -> int:
+        """Convert unsigned dictionary key to signed int mirroring TON Dictionary.Keys.Int."""
+        if bits == 0:
+            return value
+        sign_bit = 1 << (bits - 1)
+        full_range = 1 << bits
+        return value - full_range if value & sign_bit else value
+
     def parse_node(prefix_bits: int, remaining: int, slice_obj: TonSlice) -> None:
         if remaining < 0:
             raise ValueError("Malformed dictionary: negative remaining bits")
@@ -63,7 +71,8 @@ def parse_code_dictionary(
 
         if remaining_after_label == 0:
             cell, offset = extractor(slice_obj.clone())
-            result[prefix_value] = (cell, offset)
+            key = to_signed(prefix_value, key_bits)
+            result[key] = (cell, offset)
             return
 
         left_slice = slice_obj.load_ref()

@@ -25,6 +25,39 @@ from ..ast.ast import (
 )
 from ..utils.dict_parser import code_cell_extractor, parse_code_dictionary
 
+
+def _bits_to_hex(bits) -> str:
+    """Convert bitarray to hex slice string with completion tag."""
+    length = len(bits)
+    if length == 0:
+        return "x{}"
+
+    binary_str = bits.to01()
+    needs_tag = (length % 4) != 0
+
+    if needs_tag:
+        padding_bits = 4 - (length % 4)
+        binary_str += "1" + "0" * (padding_bits - 1)
+
+    hex_val = hex(int(binary_str, 2))[2:].upper().zfill(len(binary_str) // 4)
+    if needs_tag:
+        hex_val += "_"
+    return f"x{{{hex_val}}}"
+
+
+def _cell_to_string(cell: Cell) -> str:
+    """Format cell and its references similar to ton-core Cell.toString()."""
+    lines = []
+
+    def collect(node: Cell, depth: int) -> None:
+        prefix = " " * depth if depth > 0 else ""
+        lines.append(f"{prefix}{_bits_to_hex(node.bits)}")
+        for ref in node.refs:
+            collect(ref, depth + 1)
+
+    collect(cell, 0)
+    return "\n".join(lines)
+
 sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
 
 _BLOCK_CACHE: Dict[Tuple[str, int, int, int, int], BlockNode] = {}
@@ -399,6 +432,21 @@ def process_ref_or_slice_operand(
                 offset_refs=0,
                 on_cell_reference=on_cell_reference,
             )
+
+    if operand.type == 'ref' and isinstance(operand.value, Cell):
+        return ScalarNode(type='scalar', value=_cell_to_string(operand.value))
+
+    if operand.type == 'subslice':
+        slice_value = getattr(operand, "value", None)
+        if slice_value is None:
+            return ScalarNode(type='scalar', value=None)
+        if isinstance(slice_value, Cell):
+            cell_repr = slice_value
+        elif hasattr(slice_value, "to_cell"):
+            cell_repr = slice_value.to_cell()
+        else:
+            return ScalarNode(type='scalar', value=str(slice_value))
+        return ScalarNode(type='scalar', value=_cell_to_string(cell_repr))
 
     return ScalarNode(type='scalar', value=getattr(operand, "value", None))
 
