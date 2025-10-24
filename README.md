@@ -18,12 +18,6 @@
 
 ## Installation
 
-### From PyPI (Recommended)
-
-```bash
-pip install pytonasm
-```
-
 ### From Source
 
 ```bash
