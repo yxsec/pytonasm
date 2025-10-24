@@ -8,12 +8,13 @@ readme = Path(__file__).parent / "tvm_disasm" / "README.md"
 long_description = readme.read_text() if readme.exists() else ""
 
 setup(
-    name="tvm-disasm",
+    name="pytonasm",
     version="0.1.0",
-    description="TVM bytecode disassembler for The Open Network",
+    description="Python TVM bytecode disassembler and analyzer for The Open Network",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="TVM Disasm Contributors",
+    author="pytonasm Contributors",
+    url="https://github.com/yourusername/pytonasm",
     license="CC BY-NC-SA 4.0",
     packages=find_packages(),
     package_data={
@@ -25,7 +26,7 @@ setup(
     python_requires=">=3.8",
     entry_points={
         'console_scripts': [
-            'tvm-disasm=tvm_disasm.main:main',
+            'pytonasm=tvm_disasm.main:main',
         ],
     },
     classifiers=[

@@ -1,8 +1,8 @@
-# TVM Disassembler (Python)
+# pytonasm (Python TON Assembler)
 
-A Python implementation of the TON Virtual Machine (TVM) bytecode decompiler. This tool converts TVM bytecode (BoC files) into human-readable Fift assembly code.
+A Python implementation of the TON Virtual Machine (TVM) bytecode disassembler and analyzer. This tool converts TVM bytecode (BOC files) into human-readable Fift assembly code with comprehensive instruction analysis.
 
-This is a Python port of the [ton-opcode](https://github.com/tact-lang/ton-opcode) TypeScript library.
+This is a Python port like [ton-opcode](https://github.com/tact-lang/ton-opcode) TypeScript library with additional features.
 
 ## Features
 
@@ -22,21 +22,29 @@ pip install pytoniq-core
 
 ### Command Line
 
+After installation via pip:
+
 ```bash
-# Basic usage
+# Basic usage (Fift assembly)
+pytonasm contract.boc
+
+# Show detailed instructions
+pytonasm contract.boc --mode instructions
+
+# Show both formats
+pytonasm contract.boc --mode both
+
+# Show statistics
+pytonasm contract.boc --stats
+
+# With additional options
+pytonasm contract.boc --mode instructions --show-offsets --show-bytecode
+```
+
+Or use Python module directly:
+
+```bash
 python -m tvm_disasm.main contract.boc
-
-# Save to file
-python -m tvm_disasm.main contract.boc -o output.fif
-
-# Raw disassemble (no dictionary unpacking)
-python -m tvm_disasm.main contract.boc --raw
-
-# Show binary representation
-python -m tvm_disasm.main contract.boc --show-bitcode
-
-# Disable opcode aliases
-python -m tvm_disasm.main contract.boc --no-aliases
 ```
 
 ### Python API

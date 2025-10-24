@@ -1,9 +1,9 @@
-# TVM Disassembler
+# pytonasm
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-A Python implementation of TVM (TON Virtual Machine) bytecode disassembler with full instruction analysis and Fift assembly code generation.
+**Python TON Assembler** - A Python implementation of TVM (TON Virtual Machine) bytecode disassembler with full instruction analysis and Fift assembly code generation.
 
 ## Features
 
@@ -18,18 +18,24 @@ A Python implementation of TVM (TON Virtual Machine) bytecode disassembler with 
 
 ## Installation
 
-### Basic Installation
+### From PyPI (Recommended)
+
+```bash
+pip install pytonasm
+```
+
+### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tvm-disassembler.git
-cd tvm-disassembler
+git clone https://github.com/yourusername/pytonasm.git
+cd pytonasm
 
 # Install dependencies
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 
 # Install the package
-pip3 install -e .
+pip install -e .
 ```
 
 ### Dependencies
@@ -102,23 +108,32 @@ Block (hash: 587cc789eff1c84f..., 46 instructions):
 
 ### Command Line Usage
 
-Use the included `example.py` script for quick disassembly:
+After installation, use the `pytonasm` command:
 
 ```bash
 # Output Fift assembly (default)
-python example.py contract.boc
+pytonasm contract.boc
 
 # Output detailed instruction information
-python example.py contract.boc --mode instructions
+pytonasm contract.boc --mode instructions
 
 # Output both Fift and instructions
-python example.py contract.boc --mode both
+pytonasm contract.boc --mode both
 
 # Show instruction statistics
-python example.py contract.boc --stats
+pytonasm contract.boc --stats
 
 # With additional options
-python example.py contract.boc --mode instructions --show-offsets --show-bytecode
+pytonasm contract.boc --mode instructions --show-offsets --show-bytecode
+
+# For files starting with '-', use '--' separator
+pytonasm -- -1_hash.boc
+```
+
+Or use the included `example.py` script directly:
+
+```bash
+python example.py contract.boc
 ```
 
 ## Project Structure
