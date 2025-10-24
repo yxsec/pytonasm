@@ -149,4 +149,10 @@ See the [LICENSE](../LICENSE) file for full details.
 
 ## Credits
 
-Based on [ton-opcode](https://github.com/tact-lang/ton-opcode) 
+This project builds upon the excellent work of:
+
+- **[ton-opcode](https://github.com/tact-lang/ton-opcode)** by Tact Lang - Original TypeScript implementation
+- **[tvm-spec](https://github.com/ton-community/tvm-spec)** by TON Community - TVM instruction set specification
+- **[pytoniq-core](https://github.com/yungwine/pytoniq-core)** - Python library for BOC parsing
+
+Special thanks to the TON developer community. 

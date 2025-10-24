@@ -284,11 +284,19 @@ Contributions are welcome! Areas for contribution:
 
 ## Acknowledgments
 
-- [TON Blockchain](https://ton.org) for TVM specification and documentation
-- [TON Community](https://github.com/ton-community) for the broader TON ecosystem
+This project builds upon the excellent work of the TON community:
+
+- **[ton-opcode](https://github.com/tact-lang/ton-opcode)** by Tact Lang - Original TypeScript implementation that inspired this Python port
+- **[tvm-spec](https://github.com/ton-community/tvm-spec)** by TON Community - Comprehensive TVM instruction set specification (cp0.json)
+- **[TON Blockchain](https://ton.org)** - Official TVM specification and documentation
+- **[pytoniq-core](https://github.com/yungwine/pytoniq-core)** - Python library for BOC parsing and TON core functionality
+
+Special thanks to the TON developer community for their continuous contributions to the ecosystem.
 
 ## References
 
 - [TVM Whitepaper](https://ton.org/tvm.pdf) - Official TVM specification
+- [TVM Specification](https://github.com/ton-community/tvm-spec) - Community-maintained TVM instruction set
 - [Fift Documentation](https://ton.org/fiftbase.pdf) - Fift assembly language guide
 - [TON Documentation](https://docs.ton.org/) - Comprehensive TON blockchain docs
+- [ton-opcode Repository](https://github.com/tact-lang/ton-opcode) - Original TypeScript implementation
