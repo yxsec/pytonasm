@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test Data
+boc_out/
+detailed_output/
+comparison_output/
+*.boc
+
+# Node.js (for TypeScript comparison tool)
+opcode/
+node_modules/
+package-lock.json
+yarn.lock
+
+# Temporary files
+*.tmp
+*.log
+.cache/
