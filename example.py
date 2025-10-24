@@ -23,7 +23,7 @@ Examples:
 import sys
 import argparse
 from pytoniq_core import Cell
-from tvm_disasm import disassemble_raw_root, AssemblyWriter, InstructionWriter
+from tvm_disasm import disassemble_root, disassemble_raw_root, AssemblyWriter, InstructionWriter
 
 
 def show_statistics(program):
@@ -73,6 +73,8 @@ Examples:
   python example.py contract.boc --mode instructions  # Instruction details
   python example.py contract.boc --mode both          # Both formats
   python example.py contract.boc --stats              # Show statistics
+  python example.py contract.boc -o output.fif       # Save Fift to file
+  python example.py contract.boc --raw -o raw.fif    # Raw disassembly
 
 Note: If your filename starts with '-', use one of these:
   python example.py -- -1_hash.boc                    # Use -- separator
@@ -89,6 +91,10 @@ Note: If your filename starts with '-', use one of these:
                        help='Show bytecode hex values')
     parser.add_argument('--stats', action='store_true',
                        help='Show instruction statistics')
+    parser.add_argument('--output', '-o', type=str,
+                       help='Output file path for Fift assembly')
+    parser.add_argument('--raw', action='store_true',
+                       help='Use raw disassembly (no dictionary unpacking)')
 
     args = parser.parse_args()
 
@@ -118,7 +124,10 @@ Note: If your filename starts with '-', use one of these:
 
     # Disassemble to AST
     try:
-        program = disassemble_raw_root(cell)
+        if args.raw:
+            program = disassemble_raw_root(cell)
+        else:
+            program = disassemble_root(cell, compute_refs=True)
     except Exception as e:
         print(f"Error disassembling: {e}", file=sys.stderr)
         sys.exit(1)
@@ -131,7 +140,14 @@ Note: If your filename starts with '-', use one of these:
             print("=" * 80)
 
         fift_code = AssemblyWriter.write(program)
-        print(fift_code)
+        
+        # Save to file if output path specified
+        if args.output:
+            with open(args.output, 'w') as f:
+                f.write(fift_code)
+            print(f"Fift assembly saved to: {args.output}")
+        else:
+            print(fift_code)
 
         if args.mode == 'both':
             print("\n")
