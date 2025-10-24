@@ -43,7 +43,6 @@ class PrefixMatcher:
             prefix_bits = prefix_to_bin(inst['bytecode']['prefix'])
             self.instructions[prefix_bits] = inst
 
-        # Calculate the longest prefix length for optimization
         self.longest_prefix_length = max(
             len(prefix_to_bin(inst['bytecode']['prefix']))
             for inst in cp0['instructions']
@@ -98,4 +97,5 @@ class PrefixMatcher:
             slice_obj.skip_bits(bits)
             return instruction
 
+        print("prefix failure after trying lengths up to", self.longest_prefix_length, "remaining", slice_obj.remaining_bits, "next bits sample", slice_obj.preload_bits(min(32, slice_obj.remaining_bits)).to01())
         raise ValueError(f"Prefix not found, remaining bits: {slice_obj.remaining_bits}")

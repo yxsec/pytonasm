@@ -249,7 +249,6 @@ def parse_operand(
         bits_length_var_size = operand_def.get('bits_length_var_size', 0)
         completion_tag = operand_def.get('completion_tag', False)
 
-        # Calculate lengths
         ref_length = refs_add + (
             slice_obj.load_uint(refs_length_var_size) if refs_length_var_size else 0
         )
@@ -260,24 +259,13 @@ def parse_operand(
         offset_bits = slice_obj.offset_bits
         offset_refs = slice_obj.offset_refs
 
-        # Load bits
         loaded_bits = slice_obj.load_bits(bit_length)
-        bits_str = bits_to_bitstring(loaded_bits)
+        bits_array = remove_completion_tag(loaded_bits) if completion_tag else loaded_bits
 
-        # Handle completion tag
-        if completion_tag:
-            bits_str = remove_completion_tag(bits_str)
-
-        # Convert bit string back to TvmBitarray for storing
-        # For now, store as cell directly
         from pytoniq_core import begin_cell
         builder = begin_cell()
-
-        # Store bits by converting bitstring to bytes
-        if bits_str:
-            # Convert binary string to int, then store
-            int_val = int(bits_str, 2) if bits_str else 0
-            builder.store_uint(int_val, len(bits_str))
+        if bits_array:
+            builder.store_bits(bits_array)
 
         for _ in range(ref_length):
             builder.store_ref(slice_obj.load_ref())

@@ -1,15 +1,33 @@
 """
 Core disassembler for TVM bytecode.
 """
+import sys
 from dataclasses import dataclass
-from typing import List, Optional, Callable, Dict
-from pytoniq_core import Cell, Slice
-from .operand_loader import decode_instruction, DecodedInstruction
+from typing import Callable, Dict, List, Optional, Tuple
+
+from pytoniq_core import Cell
+
+from .operand_loader import DecodedInstruction, decode_instruction
 from ..ast.ast import (
-    InstructionNode, BlockNode, ProgramNode, MethodNode, ProcedureNode,
-    create_instruction, create_block, create_method, create_procedure, create_program,
-    ScalarNode, ReferenceNode, MethodReferenceNode
+    BlockNode,
+    InstructionNode,
+    MethodNode,
+    MethodReferenceNode,
+    ProcedureNode,
+    ProgramNode,
+    ReferenceNode,
+    ScalarNode,
+    create_block,
+    create_instruction,
+    create_method,
+    create_procedure,
+    create_program,
 )
+from ..utils.dict_parser import code_cell_extractor, parse_code_dictionary
+
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
+
+_BLOCK_CACHE: Dict[Tuple[str, int, int, int, int], BlockNode] = {}
 
 
 @dataclass
@@ -22,17 +40,20 @@ class DecompiledInstruction:
 
 
 # Pseudo instruction for INLINECALLDICT (Fift opcode, not TVM)
-PSEUDO_INLINECALLDICT = {
-    'mnemonic': 'INLINECALLDICT',
-    'doc': {
-        'fift': 'INLINECALLDICT',
-        'description': 'Inline call to dictionary method (pseudo-opcode for decompiler)'
+PSEUDO_INLINECALLDICT = DecodedInstruction(
+    definition={
+        "mnemonic": "INLINECALLDICT",
+        "doc": {
+            "fift": "INLINECALLDICT",
+            "description": "Inline call to dictionary method (pseudo-opcode for decompiler)",
+        },
+        "bytecode": {
+            "prefix": "",
+            "operands": [],
+        },
     },
-    'bytecode': {
-        'prefix': '',
-        'operands': []
-    }
-}
+    operands=[],
+)
 
 
 def disassemble(
@@ -55,44 +76,40 @@ def disassemble(
     Returns:
         List of decompiled instructions
     """
-    # Calculate actual limits
     bits_limit = limit_bits if limit_bits is not None else len(source.bits) - offset_bits
     refs_limit = limit_refs if limit_refs is not None else len(source.refs) - offset_refs
 
-    # Create a slice of the source cell
     slice_obj = source.begin_parse()
 
-    # Track initial state for offset calculation
     initial_bits = slice_obj.remaining_bits
     initial_refs = slice_obj.remaining_refs
 
-    # Skip to offset
     if offset_bits > 0:
         slice_obj.skip_bits(offset_bits)
     if offset_refs > 0:
         for _ in range(offset_refs):
             slice_obj.load_ref()
 
-    instructions = []
+    instructions: List[DecompiledInstruction] = []
     hash_str = source.hash.hex()
 
-    # Process bits
     bits_processed = 0
     while slice_obj.remaining_bits > 0 and bits_processed < bits_limit:
         opcode_offset = initial_bits - slice_obj.remaining_bits
         opcode = decode_instruction(source, slice_obj)
         opcode_length = (initial_bits - slice_obj.remaining_bits) - opcode_offset
 
-        instructions.append(DecompiledInstruction(
-            op=opcode,
-            hash=hash_str,
-            offset=opcode_offset,
-            length=opcode_length
-        ))
+        instructions.append(
+            DecompiledInstruction(
+                op=opcode,
+                hash=hash_str,
+                offset=opcode_offset,
+                length=opcode_length,
+            )
+        )
 
         bits_processed = (initial_bits - slice_obj.remaining_bits) - offset_bits
 
-    # Process remaining refs recursively
     refs_processed = 0
     while slice_obj.remaining_refs > 0 and refs_processed < refs_limit:
         ref_cell = slice_obj.load_ref()
@@ -127,7 +144,23 @@ def disassemble_and_process(
     Returns:
         BlockNode containing processed instructions
     """
-    opcodes = disassemble(source, offset_bits, offset_refs, limit_bits, limit_refs)
+    normalized_bits = limit_bits if limit_bits is not None else max(0, len(source.bits) - offset_bits)
+    normalized_refs = limit_refs if limit_refs is not None else max(0, len(source.refs) - offset_refs)
+
+    cache_key = None
+    if on_cell_reference is None:
+        cache_key = (
+            source.hash.hex(),
+            offset_bits,
+            offset_refs,
+            normalized_bits,
+            normalized_refs,
+        )
+        cached = _BLOCK_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+    opcodes = disassemble(source, offset_bits, offset_refs, normalized_bits, normalized_refs)
     hash_str = source.hash.hex()
     offset = offset_bits
 
@@ -142,7 +175,12 @@ def disassemble_and_process(
     last_instruction = instructions[-1]
     length = last_instruction.offset + last_instruction.length
 
-    return create_block(instructions, hash_str, offset, length)
+    block = create_block(instructions, hash_str, offset, length)
+
+    if cache_key is not None:
+        _BLOCK_CACHE[cache_key] = block
+
+    return block
 
 
 def process_instruction(
@@ -271,7 +309,7 @@ def process_calldict(op: DecompiledInstruction) -> InstructionNode:
 def process_default_instruction(
     op: DecompiledInstruction,
     source: Cell,
-    on_cell_reference: Optional[Callable[[Cell], None]] = None
+    on_cell_reference: Optional[Callable[[Cell], None]] = None,
 ) -> InstructionNode:
     """
     Process all other instructions.
@@ -293,7 +331,9 @@ def process_default_instruction(
         elif operand.type == 'bigint':
             operands.append(ScalarNode(type='scalar', value=operand.value))
         elif operand.type in ('ref', 'subslice'):
-            operands.append(process_ref_or_slice_operand(operand, source, on_cell_reference))
+            operands.append(
+                process_ref_or_slice_operand(opcode, operand, source, on_cell_reference)
+            )
         else:
             raise ValueError(f"Unknown operand type: {operand.type}")
 
@@ -321,14 +361,46 @@ def process_numeric_operand(operand):
         return ScalarNode(type='scalar', value=display_number)
 
 
-def process_ref_or_slice_operand(operand, source, on_cell_reference):
+def process_ref_or_slice_operand(
+    opcode: DecodedInstruction,
+    operand,
+    source: Cell,
+    on_cell_reference: Optional[Callable[[Cell], None]] = None,
+):
     """Process reference or slice operands."""
-    from ..ast.ast import ScalarNode
+    display_hints = operand.definition.get('display_hints', [])
+    opcode_name = opcode.definition['mnemonic']
 
-    if operand.type == 'ref':
-        return ScalarNode(type='scalar', value=operand.value)
-    else:  # subslice
-        return ScalarNode(type='scalar', value=operand.value)
+    is_continuation = (
+        has_hint(display_hints, 'continuation')
+        or opcode_name in {'PUSHCONT', 'PUSHCONT_SHORT'}
+    )
+
+    if is_continuation:
+        if operand.type == 'ref':
+            block = disassemble_and_process(
+                operand.value,
+                offset_bits=0,
+                offset_refs=0,
+                on_cell_reference=on_cell_reference,
+            )
+            return create_block(
+                block.instructions,
+                block.hash,
+                block.offset,
+                block.length,
+                cell=True,
+            )
+
+        if operand.type == 'subslice':
+            return disassemble_and_process(
+                operand.value,
+                offset_bits=0,
+                offset_refs=0,
+                on_cell_reference=on_cell_reference,
+            )
+
+    return ScalarNode(type='scalar', value=getattr(operand, "value", None))
 
 
 def get_display_number(operand, add: int, display_hints: List[Dict]) -> int:
@@ -337,6 +409,15 @@ def get_display_number(operand, add: int, display_hints: List[Dict]) -> int:
 
     # Apply add hint
     value += add
+
+    if has_hint(display_hints, 'pushint4'):
+        value = value - 16 if value > 10 else value
+
+    if has_hint(display_hints, 'optional_nargs'):
+        value = -1 if value == 15 else value
+
+    if has_hint(display_hints, 'plduz'):
+        value = 32 * (value + 1)
 
     # Apply negate hint
     if has_hint(display_hints, 'negate'):
@@ -352,26 +433,36 @@ def has_hint(hints: List[Dict], hint_type: str) -> bool:
 
 def disassemble_root(source: Cell, compute_refs: bool = True) -> ProgramNode:
     """
-    Disassemble the root cell into a program.
-
-    This function unpacks the dictionary to extract methods and procedures.
-
-    Args:
-        source: The root cell to disassemble
-        compute_refs: Whether to deduplicate refs into separate functions
-
-    Returns:
-        ProgramNode representing the complete program
+    Disassemble the root cell into a program with dictionary unpacking.
     """
-    # TODO: Implement dictionary unpacking for methods
-    # For now, just disassemble as a raw root
-    block = disassemble_raw_root(source)
+    opcodes = disassemble(source)
+    top_level_instructions = [
+        process_instruction(op, source, None) for op in opcodes
+    ]
+
+    root_methods = find_root_methods(opcodes)
+    dict_opcode = find_dict_opcode(opcodes)
+
+    if dict_opcode is None:
+        return create_program(
+            top_level_instructions=top_level_instructions,
+            methods=root_methods,
+            procedures=[],
+            with_refs=compute_refs,
+        )
+
+    procedures, methods = deserialize_dict(
+        dict_opcode.op.operands,
+        compute_refs=compute_refs,
+    )
+
+    merged_methods = root_methods + methods
 
     return create_program(
-        top_level_instructions=block.instructions,
-        methods=[],
-        procedures=[],
-        with_refs=compute_refs
+        top_level_instructions=top_level_instructions,
+        methods=merged_methods,
+        procedures=procedures,
+        with_refs=compute_refs,
     )
 
 
@@ -386,3 +477,112 @@ def disassemble_raw_root(source: Cell) -> BlockNode:
         BlockNode containing all instructions
     """
     return disassemble_and_process(source)
+
+
+def find_dict_opcode(opcodes: List[DecompiledInstruction]) -> Optional[DecompiledInstruction]:
+    """Find the DICTPUSHCONST instruction in the opcode list."""
+    for opcode in opcodes:
+        if opcode.op.definition['mnemonic'] == 'DICTPUSHCONST':
+            return opcode
+    return None
+
+
+def find_root_methods(opcodes: List[DecompiledInstruction]) -> List[MethodNode]:
+    """Extract implicit recv methods from known PUSHCONT locations."""
+    methods: List[MethodNode] = []
+    mappings = {2: 0, 6: -1}
+
+    for index, method_id in mappings.items():
+        if index >= len(opcodes):
+            continue
+
+        candidate = opcodes[index]
+        if candidate.op.definition['mnemonic'] != 'PUSHCONT':
+            continue
+
+        cont_operand = candidate.op.operands[0] if candidate.op.operands else None
+        if cont_operand is None or cont_operand.type != 'subslice':
+            continue
+
+        block = disassemble_raw_root(cont_operand.value)
+        methods.append(
+            create_method(
+                method_id=method_id,
+                body=block,
+                hash_str=block.hash,
+                offset=block.offset,
+            )
+        )
+
+    return methods
+
+
+def deserialize_dict(
+    operands: List,
+    compute_refs: bool,
+) -> Tuple[List[ProcedureNode], List[MethodNode]]:
+    """Deserialize dictionary operand into procedures and methods."""
+    dict_key = next(
+        (operand for operand in operands if operand.definition['name'] == 'n'),
+        None,
+    )
+    dict_cell_operand = next(
+        (operand for operand in operands if operand.definition['name'] == 'd'),
+        None,
+    )
+
+    if (
+        dict_key is None
+        or dict_cell_operand is None
+        or dict_key.type != 'numeric'
+        or dict_cell_operand.type != 'ref'
+    ):
+        raise ValueError("DICTPUSHCONST operands are malformed")
+
+    key_length = dict_key.value
+    dict_cell = dict_cell_operand.value
+    entries = parse_code_dictionary(dict_cell, key_length, code_cell_extractor)
+    if not entries:
+        return [], []
+
+    registered_cells: Dict[str, str] = {}
+    procedures: List[ProcedureNode] = []
+
+    def extract_referenced_cell(cell: Cell) -> None:
+        cell_hash = cell.hash.hex()
+        if cell_hash in registered_cells:
+            return
+
+        registered_cells[cell_hash] = f"?fun_ref_{cell_hash[:16]}"
+        block = disassemble_and_process(
+            cell,
+            offset_bits=0,
+            offset_refs=0,
+            on_cell_reference=extract_referenced_cell if compute_refs else None,
+        )
+        procedures.append(create_procedure(cell_hash, block))
+
+    methods: List[MethodNode] = []
+
+    for method_id in sorted(entries.keys()):
+        code_cell, offset_bits = entries[method_id]
+
+        block = disassemble_and_process(
+            code_cell,
+            offset_bits=offset_bits,
+            offset_refs=0,
+            limit_bits=None,
+            limit_refs=None,
+            on_cell_reference=extract_referenced_cell if compute_refs else None,
+        )
+
+        methods.append(
+            create_method(
+                method_id=method_id,
+                body=block,
+                hash_str=code_cell.hash.hex(),
+                offset=offset_bits,
+            )
+        )
+
+    return procedures, methods

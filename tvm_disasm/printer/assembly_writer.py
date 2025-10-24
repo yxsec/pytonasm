@@ -3,14 +3,25 @@ Assembly writer for converting AST to Fift assembly code.
 """
 import json
 import os
-from typing import Dict, Optional, Any, Union
+from typing import Any, Dict, List, Optional, Union
+
 from pytoniq_core import Cell
+
 from .base_writer import BaseWriter
 from ..ast.ast import (
-    ProgramNode, MethodNode, ProcedureNode, BlockNode, InstructionNode,
-    StackEntryNode, ControlRegisterNode, GlobalVariableNode, ScalarNode,
-    ReferenceNode, MethodReferenceNode
+    BlockNode,
+    ControlRegisterNode,
+    GlobalVariableNode,
+    InstructionNode,
+    MethodNode,
+    MethodReferenceNode,
+    ProcedureNode,
+    ProgramNode,
+    ReferenceNode,
+    ScalarNode,
+    StackEntryNode,
 )
+from ..utils.known_methods import DEBUG_SYMBOLS
 
 
 # Opcode renames for better readability
@@ -33,6 +44,16 @@ OPCODE_RENAMES = {
     "MULRSHIFT_VAR": "MULRSHIFT",
     "QMULRSHIFT_VAR": "QMULRSHIFT",
     "PUSHSLICE_LONG": "PUSHSLICE",
+    "LSHIFTDIVR": "LSHIFT#DIVR",
+    "LSHIFTDIVMODR": "LSHIFT#DIVMODR",
+    "RSHIFTRMOD": "RSHIFTR#MOD",
+    "QLSHIFTDIVMODR": "QLSHIFT#DIVMODR",
+    "MULRSHIFTRMOD": "MULRSHIFTR#MOD",
+    "LSHIFT": "LSHIFT#",
+    "RSHIFT": "RSHIFT#",
+    "MULRSHIFTR": "MULRSHIFTR#",
+    "MULRSHIFTC": "MULRSHIFTC#",
+    "MULMODPOW2": "MULMODPOW2#",
 }
 
 
@@ -54,14 +75,35 @@ class AssemblyWriter:
         self.known_procedures: Dict[str, str] = {}
         self.options = options or {}
 
+        debug_symbols = self.options.get('debugSymbols', DEBUG_SYMBOLS)
+        for glob in debug_symbols.get('globals', []):
+            index = glob.get('index')
+            name = glob.get('name')
+            if index is not None and name:
+                self.known_globals[index] = name
+
+        for proc in debug_symbols.get('procedures', []):
+            method_id = proc.get('methodId')
+            name = proc.get('name')
+            cell_hash = proc.get('cellHash', '')
+            if method_id is not None and name:
+                self.known_methods[method_id] = name
+            if cell_hash:
+                self.known_procedures[cell_hash.lower()] = name
+
         # Load cp0 spec for aliases
         spec_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
-            'spec',
-            'cp0.json'
+            "spec",
+            "cp0.json",
         )
-        with open(spec_path, 'r') as f:
+        with open(spec_path, "r", encoding="utf-8") as f:
             self.cp0 = json.load(f)
+
+        self.cp0_aliases: List[Dict[str, Any]] = self.cp0.get("aliases", [])
+        self.cp0_instructions: Dict[str, Dict[str, Any]] = {
+            instr["mnemonic"]: instr for instr in self.cp0.get("instructions", [])
+        }
 
     def resolve_global_name(self, index: int) -> str:
         """Resolve global variable name."""
@@ -73,7 +115,7 @@ class AssemblyWriter:
 
     def resolve_procedure_name(self, hash_str: str) -> str:
         """Resolve procedure name."""
-        return self.known_procedures.get(hash_str, f"?fun_ref_{hash_str[:16]}")
+        return self.known_procedures.get(hash_str.lower(), f"?fun_ref_{hash_str[:16]}")
 
     def _bits_to_hex(self, bits) -> str:
         """
@@ -216,6 +258,23 @@ class AssemblyWriter:
         else:
             self.writer.write("}>")
 
+    def _extract_argument_value(self, node: InstructionNode, index: int) -> Optional[Any]:
+        """Return raw value for scalar-like arguments."""
+        if index >= len(node.arguments):
+            return None
+
+        argument = node.arguments[index]
+        if isinstance(argument, (ScalarNode, StackEntryNode, ControlRegisterNode, GlobalVariableNode)):
+            return argument.value
+
+        return None
+
+    def _value_to_string(self, value: Any) -> str:
+        """Convert argument values to string form mirroring opcode output."""
+        if isinstance(value, Cell):
+            return self._bits_to_hex(value.bits)
+        return str(value)
+
     def maybe_specific_write(self, node: InstructionNode) -> Optional[str]:
         """
         Try to write instruction using a specific format or alias.
@@ -223,37 +282,40 @@ class AssemblyWriter:
         Returns:
             Formatted string if special handling applies, None otherwise
         """
-        opcode = node.opcode.definition['mnemonic']
-        first_arg = node.arguments[0].value if node.arguments else None
-        second_arg = node.arguments[1].value if len(node.arguments) > 1 else None
+        opcode = node.opcode.definition["mnemonic"]
+        first_arg = self._extract_argument_value(node, 0)
+        second_arg = self._extract_argument_value(node, 1)
 
         if first_arg is None:
             return None
 
-        # Check for aliases if enabled
-        use_aliases = self.options.get('useAliases', True)
-        if use_aliases:
-            # TODO: Implement alias matching
-            pass
+        original_instruction = self.cp0_instructions.get(opcode)
+        if not original_instruction:
+            return None
 
-        # Special cases for common opcodes
+        alias = self._match_alias(opcode, node)
+        if alias:
+            return alias
+
+        first_arg_str = self._value_to_string(first_arg)
+
         if opcode == "SETCP":
-            return f"SETCP{first_arg}"
+            return f"SETCP{first_arg_str}"
 
         if opcode == "XCHG_0I":
-            return f"s0 s{first_arg} XCHG"
+            return f"s0 s{first_arg_str} XCHG"
 
         if opcode == "XCHG_1I":
-            return f"s1 s{first_arg} XCHG"
+            return f"s1 s{first_arg_str} XCHG"
 
         if opcode == "XCHG_0I_LONG":
-            return f"s0 {first_arg} s() XCHG"
+            return f"s0 {first_arg_str} s() XCHG"
 
         if opcode == "POP_LONG":
-            return f"{first_arg} s() POP"
+            return f"{first_arg_str} s() POP"
 
         if opcode == "XCHG_IJ" and second_arg is not None:
-            return f"s{first_arg} s{second_arg} XCHG"
+            return f"s{first_arg_str} s{self._value_to_string(second_arg)} XCHG"
 
         if opcode == "ADDCONST":
             if first_arg == 1:
@@ -261,15 +323,30 @@ class AssemblyWriter:
             if first_arg == -1:
                 return "DEC"
 
-        if opcode == "MULCONST":
-            if first_arg == -1:
-                return "NEGATE"
+        if opcode == "MULCONST" and first_arg == -1:
+            return "NEGATE"
+
+        if (
+            original_instruction
+            and len(original_instruction.get("bytecode", {}).get("operands", [])) == 1
+        ):
+            doc_fift = original_instruction.get("doc", {}).get("fift", "")
+            if doc_fift.endswith("#"):
+                return f"{first_arg_str} {opcode}#"
+            if "#" in doc_fift and " " not in doc_fift:
+                return f"{first_arg_str} {doc_fift}"
 
         if opcode == "CALLXARGS_VAR":
-            return f"{first_arg} -1 CALLXARGS"
+            return f"{first_arg_str} -1 CALLXARGS"
 
         if opcode == "PUSH_LONG":
-            return f"{first_arg} s() PUSH"
+            return f"{first_arg_str} s() PUSH"
+
+        if opcode == "PUSHREF" and first_arg_str.startswith("x"):
+            return f"<b x{first_arg_str[1:]} s, b> PUSHREF"
+
+        if opcode == "PUSHREFSLICE" and first_arg_str.startswith("x"):
+            return f"<b x{first_arg_str[1:]} s, b> PUSHREFSLICE"
 
         # Debug instructions
         if opcode == "DEBUG":
@@ -279,6 +356,14 @@ class AssemblyWriter:
                 return "STRDUMP"
             if second_arg is not None and isinstance(first_arg, int) and isinstance(second_arg, int):
                 return f"{first_arg * 16 + second_arg} DEBUG"
+
+        if opcode == "DEBUGSTR" and first_arg_str.startswith("x{") and first_arg_str.endswith("}"):
+            hex_data = first_arg_str[2:-1].rstrip("_")
+            try:
+                buffer = bytes.fromhex(hex_data)
+                return f"\"{buffer.decode()}\" DEBUGSTR"
+            except (ValueError, UnicodeDecodeError):
+                return None
 
         return None
 
@@ -415,3 +500,54 @@ class AssemblyWriter:
         writer = AssemblyWriter(options)
         writer.write_node(node, top=True)
         return writer.output()
+    def _match_alias(self, opcode: str, node: InstructionNode) -> Optional[str]:
+        """Match instruction against cp0 aliases."""
+        if not self.options.get("useAliases", True):
+            return None
+
+        instruction = self.cp0_instructions.get(opcode)
+        if not instruction:
+            return None
+
+        for alias in self.cp0_aliases:
+            if alias.get("alias_of") != opcode:
+                continue
+            if alias.get("mnemonic") == "DUMP":
+                continue
+
+            operands = alias.get("operands", {})
+            matched = True
+
+            for operand_name, expected in operands.items():
+                operand_index = next(
+                    (
+                        idx
+                        for idx, operand in enumerate(
+                            instruction["bytecode"].get("operands", [])
+                        )
+                        if operand.get("name") == operand_name
+                    ),
+                    -1,
+                )
+                if operand_index == -1:
+                    matched = False
+                    break
+
+                if operand_index >= len(node.arguments):
+                    matched = False
+                    break
+
+                argument = node.arguments[operand_index]
+                if getattr(argument, "type", None) not in {"scalar", "stack_entry", "control_register"}:
+                    matched = False
+                    break
+
+                actual_value = getattr(argument, "value", None)
+                if actual_value != expected:
+                    matched = False
+                    break
+
+            if matched:
+                return alias.get("mnemonic")
+
+        return None
