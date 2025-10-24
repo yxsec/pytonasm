@@ -22,7 +22,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/pytonasm.git
+git clone https://github.com/yxsec/pytonasm.git
 cd pytonasm
 
 # Install dependencies
@@ -146,7 +146,11 @@ tvm_disasm/
 │   └── ast.py               # BlockNode, InstructionNode, etc.
 ├── utils/                   # Utility functions
 │   ├── prefix_matcher.py    # Opcode prefix matching
-│   └── binutils.py          # Binary utilities
+│   ├── binutils.py          # Binary utilities
+│   ├── dict_parser.py       # Dictionary parsing utilities
+│   ├── known_methods.py     # Known method definitions
+│   ├── subslice.py          # Subslice handling
+│   └── ton_slice.py         # TON slice utilities
 └── spec/
     └── cp0.json             # TVM Codepage 0 instruction definitions
 

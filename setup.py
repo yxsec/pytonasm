@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="pytonasm Contributors",
-    url="https://github.com/yourusername/pytonasm",
+    url="https://github.com/yxsec/pytonasm",
     license="CC BY-NC-SA 4.0",
     packages=find_packages(),
     package_data={
