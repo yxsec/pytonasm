@@ -121,14 +121,29 @@ Note: If your filename starts with '-', use one of these:
         sys.exit(1)
 
     # Disassemble to AST
-    try:
-        if args.raw:
+    program = None
+
+    if args.raw:
+        try:
             program = disassemble_raw_root(cell)
-        else:
+        except Exception as e:
+            print(f"Error disassembling: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        try:
             program = disassemble_root(cell, compute_refs=True)
-    except Exception as e:
-        print(f"Error disassembling: {e}", file=sys.stderr)
-        sys.exit(1)
+        except Exception as structured_error:
+            try:
+                program = disassemble_raw_root(cell)
+                print(
+                    f"Warning: structured disassembly failed ({structured_error}); "
+                    "falling back to raw output.",
+                    file=sys.stderr
+                )
+            except Exception as raw_error:
+                print(f"Error disassembling (structured mode): {structured_error}", file=sys.stderr)
+                print(f"Error disassembling (raw fallback): {raw_error}", file=sys.stderr)
+                sys.exit(1)
 
     # Output based on mode
     if args.mode in ['fift', 'both']:
