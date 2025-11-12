@@ -5,7 +5,7 @@ Main entry point for pytonasm command-line interface.
 import sys
 import argparse
 from pytoniq_core import Cell
-from .decompiler import disassemble_raw_root
+from .decompiler import disassemble_root, disassemble_raw_root
 from .printer import AssemblyWriter, InstructionWriter
 from .ast.ast import ProgramNode, BlockNode
 
@@ -91,6 +91,8 @@ Note: If your filename starts with '-', use one of these:
                        help='Show bytecode hex values')
     parser.add_argument('--stats', action='store_true',
                        help='Show instruction statistics')
+    parser.add_argument('--raw', action='store_true',
+                       help='Use raw disassembly without dictionary unpacking')
 
     args = parser.parse_args()
 
@@ -120,7 +122,10 @@ Note: If your filename starts with '-', use one of these:
 
     # Disassemble to AST
     try:
-        program = disassemble_raw_root(cell)
+        if args.raw:
+            program = disassemble_raw_root(cell)
+        else:
+            program = disassemble_root(cell, compute_refs=True)
     except Exception as e:
         print(f"Error disassembling: {e}", file=sys.stderr)
         sys.exit(1)
