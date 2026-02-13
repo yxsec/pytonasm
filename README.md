@@ -8,13 +8,15 @@
 ## Features
 
 - ✅ **Complete TVM bytecode disassembly** from BOC (Bag of Cells) files
+- ✅ **912 instructions + 82 aliases** — full coverage synced with tasm/tasmscan (cp0.json)
 - ✅ **AST generation** with full instruction details (opcode, operands, offsets)
 - ✅ **Fift assembly output** compatible with TON toolchain
 - ✅ **Instruction-level analysis** with opcodes, bytecodes, and operands
-- ✅ **Cell reference handling** with recursive expansion
+- ✅ **Recursive Cell expansion** — dictionary unpacking, method extraction, continuation traversal
 - ✅ **Comprehensive operand parsing** (numeric, bigint, ref, subslice)
 - ✅ **Based on official TVM specification** (cp0.json opcode definitions)
-- ✅ **Dual output modes** - Fift assembly and detailed instruction analysis
+- ✅ **Dual output modes** — Fift assembly and detailed instruction analysis
+- ✅ **Two disassembly modes** — `disassemble_root` (structured, with dictionary unpacking) and `disassemble_raw_root` (flat, raw Cell decoding)
 
 ## Installation
 
@@ -160,6 +162,25 @@ setup.py                     # Package installation config
 LICENSE                      # CC BY-NC-SA 4.0 License
 ```
 
+## Instruction Coverage
+
+The `cp0.json` specification includes **912 instructions** and **82 aliases**, covering:
+
+| Category | Examples | Count |
+|----------|---------|-------|
+| Stack operations | PUSH, POP, XCHG, ROT, BLKSWAP | ~60 |
+| Arithmetic | ADD, MUL, DIV, MOD, LSHIFT, RSHIFT | ~180 |
+| Cell/Slice/Builder | LDU, STU, LDREF, NEWC, ENDC, CTOS | ~120 |
+| Control flow | IF, IFELSE, WHILE, REPEAT, CALLREF, JMPREF | ~50 |
+| Dictionary | DICTGET, DICTSET, DICTIGETJMP, PFXDICTGET | ~100 |
+| Message/Address | LDMSGADDR, SENDRAWMSG, REWRITESTDADDR, INMSG_* | ~30 |
+| Crypto | HASHCU, SHA256U, CHKSIGNU, BLS_*, RIST255_* | ~40 |
+| Config/Gas | ACCEPT, GETPARAM, CONFIGPARAM, BALANCE, MYADDR | ~30 |
+| Tuple | TUPLE, INDEX, TPUSH, TPOP, UNPACKFIRST | ~25 |
+| Debug | DEBUG, DUMPSTK, STRDUMP | ~5 |
+
+> cp0.json is kept in sync with [tasmscan](https://github.com/yxsec/tasmscan) and [tasm](https://github.com/ton-blockchain/tasm) (official TVM assembler).
+
 ## Architecture
 
 ### Disassembly Pipeline
@@ -172,7 +193,9 @@ BOC File → Cell → Slice → PrefixMatcher → DecodedInstruction → AST →
 
 1. **Prefix Matcher**: Matches bytecode prefixes to instruction definitions from `cp0.json`
 2. **Operand Loader**: Parses instruction operands (numeric, ref, subslice, bigint)
-3. **Disassembler**: Orchestrates the disassembly process
+3. **Disassembler**: Orchestrates the disassembly process with two modes:
+   - `disassemble_root(cell, compute_refs=True)` — **Structured mode**: recursively unpacks dictionaries, extracts methods by `method_id`, and resolves continuations. Returns a `ProgramNode` with methods, procedures, and top-level instructions.
+   - `disassemble_raw_root(cell)` — **Raw mode**: flat disassembly without dictionary unpacking. Returns a `BlockNode` with raw hex for unresolved refs. Useful for Fift-compatible output.
 4. **Assembly Writer**: Generates human-readable Fift assembly code
 5. **Instruction Writer**: Generates detailed opcode instruction information
 
