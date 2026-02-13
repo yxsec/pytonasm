@@ -6,10 +6,13 @@ This is a Python port like [ton-opcode](https://github.com/tact-lang/ton-opcode)
 
 ## Features
 
-- Disassemble BoC files into Fift assembly
-- Support for full TVM instruction set (CP0)
-- Dictionary unpacking for methods and procedures
+- Disassemble BOC files into Fift assembly
+- **912 instructions + 82 aliases** — full TVM instruction set (CP0), synced with [tasm](https://github.com/ton-blockchain/tasm)
+- Recursive Cell expansion with dictionary unpacking for methods and procedures
+- Two disassembly modes: structured (`disassemble_root`) and raw (`disassemble_raw_root`)
+- Exotic Cell detection (Library Reference, Pruned Branch, Merkle Proof/Update)
 - Configurable output options (aliases, bitcode display, etc.)
+- Dual output: Fift assembly (`AssemblyWriter`) and instruction details (`InstructionWriter`)
 - Command-line interface and Python API
 
 ## Installation
@@ -114,13 +117,18 @@ tvm_disasm/
 ├── printer/                 # Assembly output
 │   ├── __init__.py
 │   ├── base_writer.py      # Text writer utility
-│   └── assembly_writer.py  # Fift assembly generator
+│   ├── assembly_writer.py  # Fift assembly generator
+│   └── instruction_writer.py # Instruction details generator
 ├── utils/                   # Utilities
 │   ├── __init__.py
 │   ├── binutils.py         # Binary utilities
-│   └── prefix_matcher.py   # Opcode matching
+│   ├── prefix_matcher.py   # Opcode matching
+│   ├── ton_slice.py        # TON slice utilities
+│   ├── subslice.py         # Subslice handling
+│   ├── dict_parser.py      # Dictionary parsing utilities
+│   └── known_methods.py    # Known method definitions
 └── spec/
-    └── cp0.json            # TVM instruction set spec
+    └── cp0.json            # TVM instruction set spec (912 instructions + 82 aliases)
 ```
 
 ## How It Works
