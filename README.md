@@ -179,7 +179,7 @@ The `cp0.json` specification includes **912 instructions** and **82 aliases**, c
 | Tuple | TUPLE, INDEX, TPUSH, TPOP, UNPACKFIRST | ~25 |
 | Debug | DEBUG, DUMPSTK, STRDUMP | ~5 |
 
-> cp0.json is kept in sync with [tasmscan](https://github.com/yxsec/tasmscan) and [tasm](https://github.com/ton-blockchain/tasm) (official TVM assembler).
+> cp0.json is kept in sync with [tasm](https://github.com/ton-blockchain/tasm) (official TVM assembler/disassembler by TON Studio).
 
 ## Architecture
 
